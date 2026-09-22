@@ -1,6 +1,6 @@
 /* Strata — UI layer */
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.2.2';
 let view = 'home';
 let range = '1M';
 let classFilter = 'all';
@@ -11,6 +11,21 @@ let refreshTimer = null, lastUpdated = Date.now();
 
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
+
+/* ---------- identity ---------- */
+function holderName() { return (S.settings.holderName || '').trim() || PROFILE.name; }
+function holderInitials() {
+  const parts = holderName().split(/\s+/).filter(Boolean);
+  const a = parts[0] ? parts[0][0] : '?', b = parts.length > 1 ? parts[parts.length - 1][0] : '';
+  return (a + b).toUpperCase();
+}
+function entityName() {
+  // the holding company carries the family name, so it follows the holder's surname
+  const parts = holderName().split(/\s+/).filter(Boolean);
+  return (parts[parts.length - 1] || 'Family') + ' Family Holdings Inc.';
+}
+function esc(t) { return String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function paintIdentity() { $$('.js-initials').forEach(el => { el.textContent = holderInitials(); }); }
 
 /* ---------- formatting ---------- */
 function fx(v) { return S.settings.currency === 'USD' ? v * PROFILE.fxUSD : v; }
@@ -506,16 +521,17 @@ function renderAsset() {
 
 function renderProfile() {
   const t = total();
-  $('#sheet-title').innerHTML = `<div style="font-size:15px;font-weight:650">Account</div><div style="font-size:11.5px;color:var(--faint)">${PROFILE.entity}</div>`;
+  $('#sheet-title').innerHTML = `<div style="font-size:15px;font-weight:650">Account</div><div style="font-size:11.5px;color:var(--faint)">${esc(entityName())}</div>`;
   $('#sheet-body').innerHTML = `
     <div class="card" style="display:flex;gap:14px;align-items:center">
-      <span class="avatar" style="width:54px;height:54px;font-size:17px">AR</span>
-      <span><span style="display:block;font-weight:650;font-size:16px">${PROFILE.name}</span>
+      <span class="avatar" style="width:54px;height:54px;font-size:17px">${holderInitials()}</span>
+      <span><span style="display:block;font-weight:650;font-size:16px">${esc(holderName())}</span>
       <span style="display:block;font-size:12px;color:var(--faint)">${PROFILE.tier} · client since ${PROFILE.since}</span></span>
     </div>
     <div class="section-head"><h2>Mandate</h2></div>
     <div class="card">
-      <div class="kv"><span class="k">Managed entity</span><span class="v">${PROFILE.entity}</span></div>
+      <div class="kv"><span class="k">Account holder</span><span class="v">${esc(holderName())}</span></div>
+      <div class="kv"><span class="k">Managed entity</span><span class="v">${esc(entityName())}</span></div>
       <div class="kv"><span class="k">Risk profile</span><span class="v">${PROFILE.risk}</span></div>
       <div class="kv"><span class="k">Reporting currency</span><span class="v">${S.settings.currency}</span></div>
       <div class="kv"><span class="k">Relationship</span><span class="v">${PROFILE.advisor}</span></div>
@@ -524,8 +540,8 @@ function renderProfile() {
     <div class="section-head"><h2>Custodians</h2></div>
     <div class="card">
       ${[['Interactive Brokers', 'Equities, ETFs, settlement'], ['RBC Direct Investing', 'Registered accounts'], ['Self-custody (multisig)', 'Digital assets'],
-       ['Silver Gold Bull / Zurich vault', 'Allocated metals'], ['Reid Family Holdings Inc.', 'Property & private equity']]
-      .map(c => `<div class="kv"><span class="k">${c[0]}</span><span class="v" style="font-weight:400;color:var(--faint);font-size:12px">${c[1]}</span></div>`).join('')}
+       ['Silver Gold Bull / Zurich vault', 'Allocated metals'], [entityName(), 'Property & private equity']]
+      .map(c => `<div class="kv"><span class="k">${esc(c[0])}</span><span class="v" style="font-weight:400;color:var(--faint);font-size:12px">${c[1]}</span></div>`).join('')}
     </div>
     <div class="section-head"><h2>Statements</h2></div>
     <div class="list">
@@ -545,8 +561,15 @@ function segRow(label, hint, key, opts) {
 
 function renderSettings() {
   $('#app-version').textContent = 'v' + APP_VERSION;
-  $('#p-name').textContent = PROFILE.name;
-  $('#p-entity').textContent = PROFILE.entity + ' · ' + PROFILE.tier;
+  $('#p-name').textContent = holderName();
+  $('#p-entity').textContent = entityName() + ' · ' + PROFILE.tier;
+  paintIdentity();
+
+  const nameField = document.activeElement && document.activeElement.id === 'holder-name';
+  if (!nameField) $('#set-account').innerHTML =
+    `<label class="item" for="holder-name"><span class="lbl">Account holder<span class="hint">Shown on your profile, statements and the holding company</span></span>
+      <input id="holder-name" class="textfield" type="text" maxlength="40" autocomplete="name" autocapitalize="words"
+        placeholder="${esc(PROFILE.name)}" value="${esc(S.settings.holderName || '')}"></label>`;
 
   $('#set-display').innerHTML =
     segRow('Currency', 'Converted at ' + PROFILE.fxUSD.toFixed(4) + ' USD/CAD', 'currency', [['CAD', 'CAD'], ['USD', 'USD']]) +
@@ -696,6 +719,23 @@ function wire() {
   });
 
   $('#hero-value').addEventListener('click', () => { refreshNow(); scheduleRefresh(); haptic(); toast('Updated'); });
+  document.body.addEventListener('input', e => {
+    if (e.target.id !== 'holder-name') return;
+    S.settings.holderName = e.target.value;
+    $('#p-name').textContent = holderName();
+    $('#p-entity').textContent = entityName() + ' · ' + PROFILE.tier;
+    paintIdentity();
+  });
+  document.body.addEventListener('change', e => {
+    if (e.target.id !== 'holder-name') return;
+    S.settings.holderName = e.target.value.trim().replace(/\s+/g, ' ');
+    e.target.value = S.settings.holderName;
+    $('#p-name').textContent = holderName();
+    $('#p-entity').textContent = entityName() + ' · ' + PROFILE.tier;
+    paintIdentity();
+    save(); haptic(); toast(S.settings.holderName ? 'Name updated' : 'Name reset to default');
+  });
+  document.body.addEventListener('keydown', e => { if (e.target.id === 'holder-name' && e.key === 'Enter') e.target.blur(); });
   $('#btn-privacy').addEventListener('click', () => {
     S.settings.hideBalances = !S.settings.hideBalances;
     $('#btn-privacy').setAttribute('aria-pressed', S.settings.hideBalances);
@@ -730,6 +770,7 @@ function wire() {
 /* ---------- boot ---------- */
 S = load();
 applyTheme();
+paintIdentity();
 $('#btn-privacy').setAttribute('aria-pressed', S.settings.hideBalances);
 advance(Date.now() - S.lastReal);
 wire();

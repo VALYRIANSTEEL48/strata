@@ -70,6 +70,23 @@ step('toggle currency CAD', () => { click(q('[data-view="settings"]')); click(q(
 
 step('refresh cadence', () => { for (const v of ['5', '60', '300', '30']) click(q(`[data-set="refresh"][data-val="${v}"]`)); });
 step('tap balance to update', () => { click(q('[data-view="home"]')); click(q('#hero-value')); click(q('[data-view="settings"]')); });
+step('holder name edit', () => {
+  const inp = q('#holder-name');
+  if (!inp) throw new Error('name field missing');
+  inp.value = '  Jordan   Castellano ';
+  inp.dispatchEvent(new window.Event('input', { bubbles: true }));
+  inp.dispatchEvent(new window.Event('change', { bubbles: true }));
+  const init = q('#btn-profile').textContent, ent = q('#p-entity').textContent, nm = q('#p-name').textContent;
+  console.log('    →', nm, '|', init, '|', ent);
+  if (init !== 'JC' || !ent.startsWith('Castellano Family Holdings') || nm !== 'Jordan Castellano') throw new Error('identity not applied');
+  click(q('#btn-profile'));
+  if (!q('#sheet-body').textContent.includes('Jordan Castellano') || /Reid/.test(q('#sheet-body').textContent)) throw new Error('account sheet stale');
+  click(q('#sheet-close'));
+  inp.value = '<b>x</b>'; inp.dispatchEvent(new window.Event('change', { bubbles: true }));
+  if (q('#p-name').innerHTML.includes('<b>')) throw new Error('name not escaped');
+  inp.value = ''; inp.dispatchEvent(new window.Event('change', { bubbles: true }));
+  if (q('#btn-profile').textContent !== 'AR') throw new Error('reset to default failed');
+});
 step('accent swatches', () => { for (const a of ['azure', 'magenta', 'emerald', 'violet']) click(q(`.swatch[data-accent="${a}"]`)); });
 step('toggle ATH line off/on', () => { click(q('[data-toggle="hwmLine"]')); click(q('[data-toggle="hwmLine"]')); });
 step('toggle compact/fill/haptics', () => { for (const k of ['compact', 'chartFill', 'haptics']) { click(q(`[data-toggle="${k}"]`)); click(q(`[data-toggle="${k}"]`)); } });
