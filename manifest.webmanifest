@@ -1,0 +1,17 @@
+{
+  "name": "Strata — Private Wealth",
+  "short_name": "Strata",
+  "description": "Private wealth dashboard: net worth, holdings, businesses and insights.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07081A",
+  "theme_color": "#07081A",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
