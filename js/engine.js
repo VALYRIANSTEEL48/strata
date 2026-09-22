@@ -100,6 +100,7 @@ function marketStatus(t = Date.now()) {
 
 /* ---------- state ---------- */
 const DEFAULT_SETTINGS = {
+  refresh: '30',        // seconds between price updates while the app is open
   hwmLine: true,
   hideBalances: false,
   currency: 'CAD',

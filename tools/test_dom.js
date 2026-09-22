@@ -68,6 +68,8 @@ step('toggle currency USD', () => click(q('[data-set="currency"][data-val="USD"]
 console.log('  usd hero after re-render:', (click(q('[data-view="home"]')), txt('#hero-value')));
 step('toggle currency CAD', () => { click(q('[data-view="settings"]')); click(q('[data-set="currency"][data-val="CAD"]')); });
 
+step('refresh cadence', () => { for (const v of ['5', '60', '300', '30']) click(q(`[data-set="refresh"][data-val="${v}"]`)); });
+step('tap balance to update', () => { click(q('[data-view="home"]')); click(q('#hero-value')); click(q('[data-view="settings"]')); });
 step('accent swatches', () => { for (const a of ['azure', 'magenta', 'emerald', 'violet']) click(q(`.swatch[data-accent="${a}"]`)); });
 step('toggle ATH line off/on', () => { click(q('[data-toggle="hwmLine"]')); click(q('[data-toggle="hwmLine"]')); });
 step('toggle compact/fill/haptics', () => { for (const k of ['compact', 'chartFill', 'haptics']) { click(q(`[data-toggle="${k}"]`)); click(q(`[data-toggle="${k}"]`)); } });

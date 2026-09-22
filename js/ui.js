@@ -1,12 +1,13 @@
 /* Strata — UI layer */
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 let view = 'home';
 let range = '1M';
 let classFilter = 'all';
 let openAssetId = null;
 let sheetRange = '1M';
 let scrub = null;
+let refreshTimer = null, lastUpdated = Date.now();
 
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
@@ -219,16 +220,37 @@ function holdingRow(h) {
 }
 
 /* ---------- home ---------- */
+let heroShown = null, heroRaf = null;
+function tweenHero(target) {
+  const el = $('#hero-value');
+  const paint = v => { el.innerHTML = priv(money(v, { full: true, dec: 0 })); };
+  cancelAnimationFrame(heroRaf);
+  const from = heroShown;
+  if (from == null || S.settings.hideBalances || Math.abs(target - from) < 1 ||
+      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    heroShown = target; return paint(target);
+  }
+  const t0 = performance.now(), dur = 700;
+  const frame = now => {
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    heroShown = from + (target - from) * e;
+    paint(heroShown);
+    if (k < 1) heroRaf = requestAnimationFrame(frame);
+  };
+  heroRaf = requestAnimationFrame(frame);
+}
+
 function renderHome() {
   const t = total();
   const ch = portfolioChange(range);
-  $('#hero-value').innerHTML = priv(money(t, { full: true, dec: 0 }));
+  tweenHero(t);
   const pill = $('#hero-chg');
   pill.className = 'pill ' + cls(ch.abs);
   pill.textContent = `${signed(ch.abs)} · ${pct(ch.pct)}`;
   $('#hero-chg-range').textContent = { '1D': 'past 24h', '1W': 'past week', '1M': 'past month', '1Y': 'past year', 'ALL': 'since ' + new Date(S.history[0][0]).getFullYear() }[range];
   const ms = marketStatus(S.simTime);
-  $('#hero-clock').innerHTML = `· <span style="color:${ms.open ? 'var(--up)' : 'var(--faint)'}">●</span> ${ms.label}`;
+  const upd = new Date(lastUpdated).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+  $('#hero-clock').innerHTML = `· <span style="color:${ms.open ? 'var(--up)' : 'var(--faint)'}">●</span> ${ms.label} · as of ${upd}`;
   const dd = drawdownFree();
   const pillHW = $('#hero-hw');
   pillHW.textContent = dd < 0.0015 ? 'At all-time high' : `${(dd * 100).toFixed(1)}% below peak`;
@@ -538,6 +560,7 @@ function renderSettings() {
 
   $('#set-sim').innerHTML =
 
+    segRow('Price updates', 'How often values refresh while the app is open', 'refresh', [['5', '5s'], ['30', '30s'], ['60', '1m'], ['300', '5m']]) +
     toggleRow('All-time-high line', 'Draw the running peak on the net-worth chart', 'hwmLine') +
     (() => { const m = marketStatus(S.simTime); return `<div class="item"><span class="lbl">Exchanges<span class="hint">${m.detail} · TSX, NYSE, NASDAQ</span></span><span class="val" style="color:${m.open ? 'var(--up)' : 'var(--muted)'}">${m.open ? 'Open' : 'Closed'}</span></div>`; })() +
      `<div class="item"><span class="lbl">Clock<span class="hint">Real time. Crypto trades 24/7; property and private companies revalue continuously; everything keeps running while the app is closed.</span></span><span class="val">1 : 1</span></div>
@@ -655,6 +678,7 @@ function wire() {
     if (set) {
       S.settings[set.dataset.set] = set.dataset.val;
       save(); haptic(12);
+      if (set.dataset.set === 'refresh') { scheduleRefresh(); toast('Updating every ' + ({ 5: '5 seconds', 30: '30 seconds', 60: 'minute', 300: '5 minutes' }[set.dataset.val])); }
       return render();
     }
     const acc = e.target.closest('.swatch[data-accent]');
@@ -671,6 +695,7 @@ function wire() {
     if (e.target.closest('[data-noop]')) return toast('Statements are not available in the demo');
   });
 
+  $('#hero-value').addEventListener('click', () => { refreshNow(); scheduleRefresh(); haptic(); toast('Updated'); });
   $('#btn-privacy').addEventListener('click', () => {
     S.settings.hideBalances = !S.settings.hideBalances;
     $('#btn-privacy').setAttribute('aria-pressed', S.settings.hideBalances);
@@ -698,7 +723,7 @@ function wire() {
 
   window.addEventListener('resize', () => render());
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { advance(Date.now() - S.lastReal); render(); }
+    if (!document.hidden) { advance(Date.now() - S.lastReal); lastUpdated = Date.now(); render(); scheduleRefresh(); }
   });
 }
 
@@ -710,15 +735,24 @@ advance(Date.now() - S.lastReal);
 wire();
 go('home');
 
-setInterval(() => {
+/* Prices update on the chosen cadence. The engine integrates whatever time has
+   passed, so a 5-minute refresh lands on exactly the same value a 5-second one would. */
+function refreshNow() {
   const changed = advance(Date.now() - S.lastReal);
+  lastUpdated = Date.now();
   if (changed && !document.hidden) {
     if (view === 'home' && scrub == null) renderHome();
     else if (view === 'assets') renderAssets();
     else if (view === 'insights') renderInsights();
     if (!$('#sheet').hidden && openAssetId && openAssetId !== 'profile') renderAsset();
   }
-}, 2000);
+}
+function scheduleRefresh() {
+  clearTimeout(refreshTimer);
+  const secs = Math.max(5, +S.settings.refresh || 30);
+  refreshTimer = setTimeout(() => { refreshNow(); scheduleRefresh(); }, secs * 1000);
+}
+scheduleRefresh();
 
 window.addEventListener('pagehide', () => {
   persistNow();

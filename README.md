@@ -70,7 +70,7 @@ seen 18.5%. Three years of seeded history sit behind the opening balance.
 ## Settings that actually do something
 
 Currency (CAD/USD), hide balances, abbreviated numbers, chart fill, all-time-high line,
-accent colour, haptics, forcing a history snapshot, JSON export, JSON import, and a full
+accent colour, haptics, price-update frequency (5s / 30s / 1m / 5m, default 30s), forcing a history snapshot, JSON export, JSON import, and a full
 reset back to $60,000,000. The Market section shows live exchange status.
 
 ## Files
