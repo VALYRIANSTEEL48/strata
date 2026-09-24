@@ -8,6 +8,7 @@ for (let k = 0; k < TRIALS; k++) {
   global.localStorage = { getItem: x => (x in store ? store[x] : null), setItem: (x, v) => { store[x] = v; }, removeItem: x => { delete store[x]; } };
   global.setTimeout = () => 0;
   global.fmtMoneyPlain = v => '$' + Math.round(v).toLocaleString('en-CA');
+  global.fmtUnits = (u, h) => u + ' ' + h.sym;
   eval(src);
   S = load();
   const start = total(); let peak = start, dd = 0;

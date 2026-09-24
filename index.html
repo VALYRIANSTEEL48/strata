@@ -2,7 +2,7 @@
 <html lang="en" data-accent="violet">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Strata — Private Wealth</title>
 <meta name="description" content="Strata private wealth dashboard.">
 <meta name="theme-color" content="#07081A">
@@ -19,121 +19,149 @@
 <div id="app">
 
   <header class="topbar">
-    <div class="brand">
-      <img class="mark" src="./icons/mark.svg" alt="">
-      <span>Strata</span>
-    </div>
+    <div class="brand"><img class="mark" src="./icons/mark.svg" alt=""><span>Strata</span></div>
     <div class="spacer"></div>
+    <button class="iconbtn" id="btn-activity" aria-label="Activity">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5 6 4-13L16 12h5"/></svg>
+    </button>
     <button class="iconbtn" id="btn-privacy" aria-label="Hide balances">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
     </button>
-    <button class="avatar js-initials" id="btn-profile" aria-label="Profile">AR</button>
+    <button class="avatar js-initials" id="btn-profile" aria-label="Account">AH</button>
   </header>
 
-  <!-- ============ HOME ============ -->
-  <main class="view" id="view-home">
-    <section class="hero">
-      <div class="label"><span class="eyebrow">Total net worth</span><span class="pill ath" id="hero-hw">At all-time high</span></div>
-      <div class="value num" id="hero-value">—</div>
-      <div class="deltarow">
-        <span class="pill" id="hero-chg">—</span>
-        <span class="muted" id="hero-chg-range">today</span>
-        <span class="muted" id="hero-clock"></span>
+  <div id="scroll">
+
+    <!-- ============ HOME ============ -->
+    <main class="view" id="view-home">
+      <section class="hero">
+        <div class="label"><span class="eyebrow">Total net worth</span><span class="pill ath" id="hero-hw">At all-time high</span></div>
+        <div class="value num" id="hero-value">—</div>
+        <div class="deltarow">
+          <span class="pill" id="hero-chg">—</span>
+          <span class="muted" id="hero-chg-range"></span>
+          <span class="muted" id="hero-clock"></span>
+        </div>
+      </section>
+
+      <div class="chartwrap">
+        <canvas class="chart" id="chart-main" height="190"></canvas>
+        <div class="ranges" id="ranges" role="tablist">
+          <button role="tab" data-range="1D">1D</button>
+          <button role="tab" data-range="1W">1W</button>
+          <button role="tab" data-range="1M" aria-selected="true">1M</button>
+          <button role="tab" data-range="1Y">1Y</button>
+          <button role="tab" data-range="ALL">ALL</button>
+        </div>
+        <div class="chart-legend">
+          <span><i style="border-color:var(--accent-2)"></i>Net worth</span>
+          <span><i style="border-color:var(--gold);border-top-style:dashed"></i>All-time high</span>
+        </div>
       </div>
-    </section>
 
-    <div class="chartwrap">
-      <canvas class="chart" id="chart-main" height="190"></canvas>
-      <div class="ranges" id="ranges" role="tablist">
-        <button role="tab" data-range="1D">1D</button>
-        <button role="tab" data-range="1W">1W</button>
-        <button role="tab" data-range="1M" aria-selected="true">1M</button>
-        <button role="tab" data-range="1Y">1Y</button>
-        <button role="tab" data-range="ALL">ALL</button>
+      <div class="grid3">
+        <div class="card stat"><div class="k">Buying power</div><div class="v num" id="s-cash">—</div><div class="s">settlement cash</div></div>
+        <div class="card stat"><div class="k">Income</div><div class="v num" id="s-income">—</div><div class="s">per year</div></div>
+        <div class="card stat"><div class="k">Unrealised</div><div class="v num" id="s-gain">—</div><div class="s" id="s-gain-pc">—</div></div>
       </div>
-      <div class="chart-legend">
-        <span><i style="border-color:var(--accent-2)"></i>Net worth</span>
-        <span><i style="border-color:var(--gold);border-top-style:dashed"></i>All-time high</span>
+
+      <div class="section-head"><h2>Allocation</h2><button class="link" data-goto="insights">Analysis →</button></div>
+      <div class="card">
+        <div class="alloc">
+          <svg id="donut" viewBox="0 0 120 120" width="112" height="112" aria-hidden="true"></svg>
+          <div class="alloc-list" id="alloc-list"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="grid3">
-      <div class="card tight stat"><div class="k">Income run-rate</div><div class="v num" id="s-income">—</div><div class="s">per year</div></div>
-      <div class="card tight stat"><div class="k">Liquid</div><div class="v num" id="s-liquid">—</div><div class="s" id="s-liquid-pc">—</div></div>
-      <div class="card tight stat"><div class="k">Book gain</div><div class="v num up" id="s-gain">—</div><div class="s" id="s-gain-pc">—</div></div>
-    </div>
+      <div class="section-head"><h2>Your companies</h2><button class="link" data-goto="assets">All holdings →</button></div>
+      <div class="card flush" id="home-biz"></div>
 
-    <div class="section-head"><h2>Allocation</h2><button class="link" data-goto="insights">Analysis →</button></div>
-    <div class="card">
-      <div class="alloc">
-        <svg id="donut" viewBox="0 0 120 120" width="118" height="118" aria-hidden="true"></svg>
-        <div class="alloc-list" id="alloc-list"></div>
+      <div class="section-head"><h2>Movers today</h2><button class="link" data-goto="markets">Markets →</button></div>
+      <div class="card flush" id="movers"></div>
+
+      <div class="section-head"><h2>Recent activity</h2><button class="link" data-goto="activity">History →</button></div>
+      <div class="card flush" id="home-activity"></div>
+    </main>
+
+    <!-- ============ ASSETS ============ -->
+    <main class="view" id="view-assets" hidden>
+      <div class="section-head" style="margin-top:14px"><h2>Holdings</h2><span class="link num" id="assets-total"></span></div>
+      <div class="chips" id="class-chips"></div>
+      <div class="card flush" id="holdings-list"></div>
+    </main>
+
+    <!-- ============ MARKETS ============ -->
+    <main class="view" id="view-markets" hidden>
+      <div class="section-head" style="margin-top:14px"><h2>Markets</h2><span class="link num" id="markets-cash"></span></div>
+      <div class="search">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="market-search" type="search" placeholder="Search name or ticker" autocomplete="off" autocorrect="off" spellcheck="false">
       </div>
-    </div>
+      <div class="chips" id="market-chips"></div>
+      <div class="card flush" id="market-list"></div>
+    </main>
 
-    <div class="section-head"><h2>Movers today</h2><button class="link" data-goto="assets">All holdings →</button></div>
-    <div class="card" id="movers"></div>
+    <!-- ============ INSIGHTS ============ -->
+    <main class="view" id="view-insights" hidden>
+      <div class="section-head" style="margin-top:14px"><h2>Insights</h2><span class="link" id="insights-date"></span></div>
+      <div class="card" id="insight-cards"></div>
+      <div class="section-head"><h2>Return by asset class</h2></div>
+      <div class="card" id="class-perf"></div>
+      <div class="section-head"><h2>Risk &amp; concentration</h2></div>
+      <div class="card" id="risk-card"></div>
+      <div class="section-head"><h2>Income by source</h2></div>
+      <div class="card" id="income-card"></div>
+      <div class="section-head"><h2>Operating companies</h2></div>
+      <div class="card flush" id="biz-card"></div>
+      <div class="section-head"><h2>Venture portfolio</h2></div>
+      <div class="card flush" id="venture-card"></div>
+    </main>
 
-    <div class="section-head"><h2>Recent activity</h2><button class="link" data-goto="activity">History →</button></div>
-    <div class="card" id="home-activity"></div>
-  </main>
+    <!-- ============ ACTIVITY ============ -->
+    <main class="view" id="view-activity" hidden>
+      <div class="section-head" style="margin-top:14px"><h2>Activity</h2><span class="link" id="activity-count"></span></div>
+      <div class="chips" id="activity-chips"></div>
+      <div class="card flush" id="activity-list"></div>
+    </main>
 
-  <!-- ============ ASSETS ============ -->
-  <main class="view" id="view-assets" hidden>
-    <div class="section-head" style="margin-top:6px"><h2>Holdings</h2><span class="link num" id="assets-total"></span></div>
-    <div class="chips" id="class-chips"></div>
-    <div class="card" id="holdings-list" style="margin-top:14px"></div>
-  </main>
+    <!-- ============ SETTINGS ============ -->
+    <main class="view" id="view-settings" hidden>
+      <div class="section-head" style="margin-top:14px"><h2>Settings</h2><span class="link" id="app-version"></span></div>
+      <button class="card" id="profile-card" style="display:flex;gap:13px;align-items:center;width:100%;text-align:left">
+        <span class="avatar js-initials" style="width:46px;height:46px;font-size:15px">AH</span>
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-weight:650" id="p-name"></span>
+          <span style="display:block;font-size:12px;color:var(--faint)" id="p-entity"></span>
+        </span>
+        <span class="muted">›</span>
+      </button>
+      <div class="eyebrow" style="margin:22px 4px 0">Account</div>
+      <div class="list" id="set-account"></div>
+      <div class="eyebrow" style="margin:22px 4px 0">Display</div>
+      <div class="list" id="set-display"></div>
+      <div class="eyebrow" style="margin:22px 4px 0">Market</div>
+      <div class="list" id="set-sim"></div>
+      <div class="eyebrow" style="margin:22px 4px 0">Data</div>
+      <div class="list" id="set-data"></div>
+      <div class="eyebrow" style="margin:22px 4px 0">About</div>
+      <div class="list" id="set-about"></div>
+      <p class="footnote">Strata is a demonstration app. Positions, prices and companies are simulated locally on this device and are not connected to any market, custodian or account.</p>
+    </main>
 
-  <!-- ============ INSIGHTS ============ -->
-  <main class="view" id="view-insights" hidden>
-    <div class="section-head" style="margin-top:6px"><h2>Insights</h2><span class="link" id="insights-date"></span></div>
-    <div class="card" id="insight-cards"></div>
+  </div>
 
-    <div class="section-head"><h2>Return by asset class</h2></div>
-    <div class="card" id="class-perf"></div>
-
-    <div class="section-head"><h2>Risk &amp; concentration</h2></div>
-    <div class="card" id="risk-card"></div>
-
-    <div class="section-head"><h2>Income by source</h2></div>
-    <div class="card" id="income-card"></div>
-
-    <div class="section-head"><h2>Owned businesses</h2></div>
-    <div class="card" id="biz-card"></div>
-  </main>
-
-  <!-- ============ ACTIVITY ============ -->
-  <main class="view" id="view-activity" hidden>
-    <div class="section-head" style="margin-top:6px"><h2>Activity</h2><span class="link" id="activity-count"></span></div>
-    <div class="card" id="activity-list"></div>
-  </main>
-
-  <!-- ============ SETTINGS ============ -->
-  <main class="view" id="view-settings" hidden>
-    <div class="section-head" style="margin-top:6px"><h2>Settings</h2><span class="link" id="app-version"></span></div>
-
-    <button class="card" id="profile-card" style="display:flex;gap:13px;align-items:center;width:100%;text-align:left">
-      <span class="avatar js-initials" style="width:46px;height:46px;font-size:15px">AR</span>
-      <span style="flex:1">
-        <span style="display:block;font-weight:650" id="p-name"></span>
-        <span style="display:block;font-size:12px;color:var(--faint)" id="p-entity"></span>
-      </span>
-      <span class="muted">›</span>
-    </button>
-
-    <div class="eyebrow" style="margin:22px 4px 0">Account</div>
-    <div class="list" id="set-account"></div>
-    <div class="eyebrow" style="margin:22px 4px 0">Display</div>
-    <div class="list" id="set-display"></div>
-    <div class="eyebrow" style="margin:22px 4px 0">Market</div>
-    <div class="list" id="set-sim"></div>
-    <div class="eyebrow" style="margin:22px 4px 0">Data</div>
-    <div class="list" id="set-data"></div>
-    <div class="eyebrow" style="margin:22px 4px 0">About</div>
-    <div class="list" id="set-about"></div>
-    <p class="footnote">Strata is a demonstration app. Positions, prices and businesses are simulated locally on this device and are not connected to any market, custodian or account.</p>
-  </main>
+  <nav class="tabs" id="tabs" role="tablist">
+    <button role="tab" data-view="home" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg><span>Home</span></button>
+    <button role="tab" data-view="assets">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M9 9v11"/></svg><span>Assets</span></button>
+    <button role="tab" data-view="markets">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16l5-6 4 3 4-6 5 4"/><path d="M3 20h18"/></svg><span>Markets</span></button>
+    <button role="tab" data-view="insights">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V4M16 19v-7M22 19H2"/></svg><span>Insights</span></button>
+    <button role="tab" data-view="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 4.7 8.5a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z"/></svg><span>Settings</span></button>
+  </nav>
 
   <!-- ============ DETAIL SHEET ============ -->
   <div class="sheet" id="sheet" hidden>
@@ -143,21 +171,23 @@
       </button>
       <div style="flex:1;min-width:0" id="sheet-title"></div>
     </div>
-    <div class="sheet-body" id="sheet-body"></div>
+    <div class="sheet-scroll" id="sheet-body"></div>
+    <div class="sheet-foot" id="sheet-foot" hidden></div>
   </div>
 
-  <nav class="tabs" id="tabs" role="tablist">
-    <button role="tab" data-view="home" aria-selected="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg><span>Home</span></button>
-    <button role="tab" data-view="assets">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M9 9v11"/></svg><span>Assets</span></button>
-    <button role="tab" data-view="insights">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V4M16 19v-7M22 19H2"/></svg><span>Insights</span></button>
-    <button role="tab" data-view="activity">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5 6 4-13L16 12h5"/></svg><span>Activity</span></button>
-    <button role="tab" data-view="settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.2A1.7 1.7 0 0 0 4.7 8.5a1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.4 1z"/></svg><span>Settings</span></button>
-  </nav>
+  <!-- ============ TRADE SHEET ============ -->
+  <div class="sheet" id="trade" hidden>
+    <div class="sheet-head">
+      <button class="iconbtn" id="trade-close" aria-label="Cancel">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div style="flex:1;min-width:0" id="trade-title"></div>
+    </div>
+    <div class="sheet-scroll" id="trade-body"></div>
+    <div class="sheet-foot">
+      <button class="btn primary" id="trade-confirm">Review</button>
+    </div>
+  </div>
 
   <div class="toast" id="toast"></div>
 </div>

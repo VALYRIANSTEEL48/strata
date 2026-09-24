@@ -4,6 +4,7 @@ const store = {};
 global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } };
 global.setTimeout = fn => { fn(); return 0; };
 global.fmtMoneyPlain = v => '$' + Math.round(v).toLocaleString('en-CA');
+global.fmtUnits = (u, h) => u + ' ' + h.sym;
 eval(['js/seed.js', 'js/engine.js'].map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n').replace(/^const /gm, 'var ').replace(/^let /gm, 'var '));
 
 S = load();
