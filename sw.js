@@ -1,4 +1,4 @@
-const CACHE = 'strata-v2.0.0';
+const CACHE = 'strata-v2.1.0';
 const ASSETS = [
   './', './index.html', './css/app.css',
   './js/seed.js', './js/engine.js', './js/ui.js',

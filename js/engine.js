@@ -23,7 +23,7 @@
    unrealised gains are tracked separately.                                            */
 
 const STORE_KEY = 'strata.state.v1';
-const STATE_VERSION = 3;
+const STATE_VERSION = 4;
 const YEAR_S = 31557600;
 const DAY_MS = 86400000;
 const TRADING_YEAR_S = 252 * 6.5 * 3600;
@@ -168,13 +168,15 @@ function newPosition(h, qty, price, book) {
   if (h.biz) {
     const b = h.biz;
     if (b.type === 'venture') {
-      pos.biz = { type: 'venture', valuation: b.valuation, burn: b.burn, stage: b.stage, milestone: b.milestone, rounds: 0, cashOut: 0 };
+      pos.biz = { type: 'venture', valuation: b.valuation, burn: b.burn, headcount: b.headcount, stake: b.stake,
+        stage: b.stage, milestone: b.milestone, step: 0, rounds: 0, downs: 0, cashOut: 0, raised: 0, dead: false };
       pos.price = b.stake * b.valuation;
     } else {
-      const mult0 = h.price / (b.stake * b.revenue * b.margin);
+      const mult0 = (h.price / b.stake - (b.assets || 0)) / (b.revenue * b.margin);
       const yearFrac = (etWall(Date.now()) - Date.UTC(etWall(Date.now()).getUTCFullYear(), 0, 1)) / (365 * DAY_MS);
       pos.biz = {
-        type: 'operating', revenue: b.revenue, margin: b.margin, multiple: mult0, mult0,
+        type: 'operating', revenue: b.revenue, margin: b.margin, multiple: mult0, mult0, stake: b.stake,
+        assets: b.assets || 0, basis: 'ebitda', arrMult: 0, headcount: b.headcount, evStep: 0,
         accounts: b.accounts.map(a => ({ name: a.name, bal: a.bal })),
         ytdRevenue: b.revenue * yearFrac, ytdProfit: b.revenue * b.margin * yearFrac, monthProfit: 0
       };
@@ -362,11 +364,15 @@ function stepMarket(t0, t1) {
 
     if (st.biz && st.biz.type === 'operating') {
       const b = st.biz, m = h.biz, sq = Math.sqrt(dtCal);
-      b.revenue *= Math.exp((h.mu - 0.5 * 0.04) * dtCal + 0.20 * sq * gauss());
+      const rv = h.sigma || 0.15;                 // revenue is as erratic as the business is
+      b.revenue *= Math.exp((h.mu - 0.5 * rv * rv) * dtCal + rv * sq * gauss());
       b.margin = Math.max(0.02, m.margin + (b.margin - m.margin) * Math.exp(-4 * dtCal) + 0.03 * sq * gauss());
       b.multiple = Math.max(2.5, b.mult0 + (b.multiple - b.mult0) * Math.exp(-1 * dtCal) + 0.8 * sq * gauss());
+      b.assets = (b.assets || 0) * Math.exp(0.03 * dtCal);   // land and reserves appreciate
       const ebitda = b.revenue * b.margin;
-      st.price = m.stake * ebitda * b.multiple;
+      st.price = b.stake * enterpriseValue(b);
+
+      applyBusinessEvents(h, st, b, m, dtCal);
 
       const seasonal = 1 + m.seasonality * monthPhase;
       const profit = ebitda * seasonal * dtCal;
@@ -375,7 +381,7 @@ function stepMarket(t0, t1) {
       b.monthProfit += profit;
       const share = (profit * 0.55) / b.accounts.length;
       b.accounts.forEach(a => { a.bal += share; });
-      const dist = profit * m.stake * 0.45;
+      const dist = profit * b.stake * 0.45;
       income += dist; st.income += dist;
       S.incomeByClass.private = (S.incomeByClass.private || 0) + dist;
       S.monthIncome.private = (S.monthIncome.private || 0) + dist;
@@ -385,28 +391,12 @@ function stepMarket(t0, t1) {
     if (st.biz && st.biz.type === 'venture') {
       const b = st.biz, m = h.biz, sq = Math.sqrt(dtCal);
       const sg = h.sigma * VOL_SCALE;
-      const upRate = m.roundRate || 0.5;
-      const jumpDrift = upRate * ROUND_UP_MEAN + DOWN_ROUND_RATE * ROUND_DOWN_MEAN;
-      b.valuation *= Math.exp((h.mu - jumpDrift - 0.5 * sg * sg) * dtCal + sg * sq * gauss());
+      // between rounds a private mark barely moves: no one is repricing it
+      b.valuation *= Math.exp((h.mu - 0.5 * sg * sg) * dtCal + sg * sq * gauss());
       b.cashOut += b.burn * dtCal;
-
-      const STAGES = ['Seed', 'Series A', 'Series B', 'Series C', 'Series D', 'Growth'];
-      if (Math.random() < upRate * dtCal) {
-        const step = 1.25 + Math.random() * 0.5;
-        b.valuation *= step;
-        b.rounds = (b.rounds || 0) + 1;
-        b.stage = STAGES[Math.min(STAGES.length - 1, STAGES.indexOf(b.stage) + 1)] || b.stage;
-        b.burn *= 1.35;
-        logEvent('round', h.name + ' raises ' + b.stage,
-          'Marked up ' + ((step - 1) * 100).toFixed(0) + '% to ' + fmtMoneyPlain(b.valuation) + '. Your ' + (m.stake * 100).toFixed(0) + '% is now ' + fmtMoneyPlain(m.stake * b.valuation) + '.');
-      } else if (Math.random() < DOWN_ROUND_RATE * dtCal) {
-        const step = 0.50 + Math.random() * 0.35;
-        b.valuation *= step;
-        b.burn *= 0.80;
-        logEvent('down', h.name + ' marked down',
-          'Valuation cut ' + ((1 - step) * 100).toFixed(0) + '% to ' + fmtMoneyPlain(b.valuation) + ' after a missed milestone. Burn reduced to ' + fmtMoneyPlain(b.burn) + '/yr.');
-      }
-      st.price = m.stake * b.valuation;
+      if (!b.dead && b.step === 0) capitalCall(h, b, b.burn * (m.ownerShare ?? 0.6) * dtCal);
+      applyVentureArc(h, st, b, m, dtCal);
+      st.price = b.stake * b.valuation;
       continue;
     }
 
@@ -435,6 +425,149 @@ function stepMarket(t0, t1) {
   settle.price += income;
   settle.income += income;
   S.incomeTotal += income;
+}
+
+/* What a company is worth on its current basis, before your ownership share. */
+function enterpriseValue(b) {
+  const core = b.basis === 'arr' ? b.revenue * b.arrMult : b.revenue * b.margin * b.multiple;
+  return core + (b.assets || 0);
+}
+
+/* One-off things that happen to a real business and reprice it: an appraisal that puts
+   land on the books at market, a resource statement, a bolt-on acquisition, a product
+   launch, or a re-rate onto a revenue multiple. Each fires once, on a hazard rate. */
+const SETBACKS = {
+  'biz-kawartha': ['loses its head chef and a full season to a kitchen fire', 'faces a bad harvest and input costs it cannot pass on'],
+  'biz-northpine': ['loses an anchor supply contract to a lower bidder', 'absorbs a freight-rate squeeze it cannot pass through'],
+  'biz-selkirk': ['hits a grade shortfall and a permitting delay', 'writes off a stripping programme that did not pay'],
+  'biz-meridian': ['loses two associate dentists to a consolidator', 'sees fee guide changes compress margins'],
+  'biz-overdrive': ['is hit by a platform algorithm change and an ad-rate slump', 'loses a sponsor mid-contract'],
+  'biz-ninebark': ['sees the back catalogue decay faster than modelled', 'slips its milestone and burns the publisher advance'],
+  'biz-strategerium': ['loses its largest contract at renewal', 'sees churn spike as a competitor undercuts it']
+};
+
+function applyBusinessEvents(h, st, b, m, dtCal) {
+  // recurring setbacks: the things that go wrong in an operating business
+  if (Math.random() < 0.13 * dtCal) {
+    const before = b.stake * enterpriseValue(b);
+    const hit = 0.80 + Math.random() * 0.14;
+    b.revenue *= hit;
+    b.margin = Math.max(0.02, b.margin * (0.88 + Math.random() * 0.1));
+    st.price = b.stake * enterpriseValue(b);
+    const lines = SETBACKS[h.id] || ['has a bad year'];
+    logEvent('down', h.name + ' — setback',
+      h.name + ' ' + lines[Math.floor(Math.random() * lines.length)] + '. Revenue down ' + ((1 - hit) * 100).toFixed(0) +
+      '%, your stake off ' + fmtMoneyPlain(Math.abs(st.price - before)) + '.');
+    return;
+  }
+
+  const plan = m.events;
+  if (!plan || b.evStep >= plan.length) return;
+  const ev = plan[b.evStep];
+  if (Math.random() >= dtCal / ev.years) return;
+
+  const before = b.stake * enterpriseValue(b);
+  const set = ev.set || {};
+  const disappoints = Math.random() < (ev.pFail ?? 0.30);   // it happened; it just didn't deliver
+  const k = disappoints ? 0.18 : 1;
+
+  if (set.assets != null) b.assets = set.assets * (disappoints ? 0.45 + Math.random() * 0.2 : 0.85 + Math.random() * 0.3);
+  if (set.revenueMult != null) b.revenue *= 1 + (set.revenueMult - 1) * k * (0.9 + Math.random() * 0.2);
+  if (set.multiple != null && !disappoints) { b.multiple = set.multiple; b.mult0 = set.multiple; }
+  if (set.basis) b.basis = set.basis;
+  if (set.arrMult != null) b.arrMult = set.arrMult * (disappoints ? 0.6 : 0.9 + Math.random() * 0.2);
+  if (set.headcount != null) b.headcount = Math.round(set.headcount * (disappoints ? 0.6 : 1));
+  b.evStep++;
+  st.price = b.stake * enterpriseValue(b);
+  const delta = st.price - before;
+  logEvent(disappoints ? 'down' : 'reval', h.name + ' — ' + ev.title,
+    (disappoints ? ev.body + ' It comes in well under plan.' : ev.body) +
+    ' Your stake ' + (delta >= 0 ? 'up ' : 'down ') + fmtMoneyPlain(Math.abs(delta)) + ' to ' + fmtMoneyPlain(st.price) + '.');
+}
+
+/* Before anyone else is in, the burn is yours. Capital calls draw on settlement cash,
+   then savings, then the GIC ladder. If nothing is left the company takes bridge money
+   on bad terms and you are diluted for it — which is what actually happens. */
+function capitalCall(h, b, amount) {
+  if (!(amount > 0)) return;
+  let need = amount;
+  for (const id of [CASH_ID, 'cash-hisa', 'cash-gic']) {
+    const acct = S.holdings[id];
+    if (!acct || acct.price <= 0) continue;
+    const take = Math.min(need, acct.price);
+    acct.price -= take; acct.book = Math.max(0, acct.book - take);
+    need -= take;
+    if (need <= 1e-9) break;
+  }
+  const funded = amount - need;
+  b.funded = (b.funded || 0) + funded;
+  S.capitalCalled = (S.capitalCalled || 0) + funded;
+  S.monthCalls = (S.monthCalls || 0) + funded;
+  if (need > 1e-9) {
+    // unfunded: bridge financing, priced against you
+    b.stake *= Math.max(0, 1 - need / Math.max(b.valuation * 0.02, 1));
+    b.bridged = (b.bridged || 0) + need;
+    if (!b.bridgeWarned || S.simTime - b.bridgeWarned > 30 * DAY_MS) {
+      b.bridgeWarned = S.simTime;
+      logEvent('down', h.name + ' takes bridge financing',
+        'Capital call could not be funded from cash. A bridge note covers the shortfall and dilutes you to ' + (b.stake * 100).toFixed(0) + '%.');
+    }
+  }
+}
+
+/* A self-funded venture has no outside price. When it raises, the new lead reprices the
+   whole company, which is why these move in steps. Missed milestones cut the mark and
+   push the next round out. */
+function applyVentureArc(h, st, b, m, dtCal) {
+  if (b.dead) return;
+  const arc = m.arc || [];
+  const next = arc[b.step];
+
+  const sinceRound = S.simTime - (b.lastRound || 0);
+  if (next && sinceRound > 270 * DAY_MS && Math.random() < dtCal / next.years) {
+    const disp = 0.65 + Math.random() * 0.55;               // the lead's number, not yours
+    const post = Math.max(b.valuation * 1.1, next.post * disp);
+    const raise = post * (0.18 + Math.random() * 0.16);     // new money buys new shares
+    const keep = 1 - raise / post;                          // and dilutes everyone already in
+    const wasStake = b.stake;
+    b.stake *= keep;
+    b.valuation = post;
+    b.raised = (b.raised || 0) + raise;
+    b.stage = next.stage; b.burn = next.burn; b.headcount = next.headcount; b.milestone = next.milestone;
+    b.step++; b.rounds = (b.rounds || 0) + 1; b.lastRound = S.simTime;
+    logEvent('round', h.name + ' raises ' + next.stage,
+      'Priced by a new lead at ' + fmtMoneyPlain(post) + ' post on ' + fmtMoneyPlain(raise) + ' of new money. You are diluted from ' +
+      (wasStake * 100).toFixed(0) + '% to ' + (b.stake * 100).toFixed(0) + '%, worth ' + fmtMoneyPlain(b.stake * post) +
+      '. Burn rises to ' + fmtMoneyPlain(b.burn) + '/yr across ' + b.headcount + ' people.');
+    return;
+  }
+
+  // failure risk is highest before anyone else has validated it, and falls with each round
+  const failRate = 0.09 * Math.pow(0.55, b.step);
+  if (Math.random() < failRate * dtCal) {
+    b.dead = true; b.burn = 0; b.step = arc.length;
+    b.valuation *= 0.04;
+    b.stage = 'Wound down'; b.milestone = 'Assets and IP sold off';
+    logEvent('down', h.name + ' wound down',
+      'The programme failed and the company is being wound up. Your stake is written down to ' + fmtMoneyPlain(b.stake * b.valuation) + ' of residual IP and equipment.');
+    return;
+  }
+
+  if (Math.random() < (m.downRate || 0.1) * dtCal) {
+    const step = 0.55 + Math.random() * 0.30;
+    b.valuation *= step;
+    b.burn *= 0.80;
+    b.downs = (b.downs || 0) + 1;
+    logEvent('down', h.name + ' marked down',
+      'Milestone missed. The mark is cut ' + ((1 - step) * 100).toFixed(0) + '% to ' + fmtMoneyPlain(b.valuation) +
+      ' and burn trimmed to ' + fmtMoneyPlain(b.burn) + '/yr. The next round moves out.');
+  }
+}
+
+/* Your live ownership: diluted by every round a venture raises. */
+function stakeOf(h) {
+  const st = S.holdings[h.id];
+  return st && st.biz && st.biz.stake != null ? st.biz.stake : (h.biz ? h.biz.stake : 1);
 }
 
 function rollDay(newKey) {
@@ -468,6 +601,12 @@ function announcePaydays(month) {
   if (divs) logEvent('income', 'Dividends — ' + monthName, fmtMoneyPlain(divs) + ' from equities and ETFs.');
   const interest = (mi.cash || 0) + (mi.crypto || 0);
   if (interest) logEvent('income', 'Interest & staking — ' + monthName, fmtMoneyPlain(interest) + ' from savings, GICs and staked tokens.');
+  if (S.monthCalls > 1) {
+    const selfFunded = owned().filter(x => { const b = S.holdings[x.id].biz; return b && b.type === 'venture' && b.step === 0 && !b.dead; });
+    logEvent('call', 'Capital calls — ' + monthName, fmtMoneyPlain(S.monthCalls) + ' funded to ' +
+      (selfFunded.length ? selfFunded.map(x => x.sym).join(', ') : 'the venture book') + ' out of settlement cash.');
+  }
+  S.monthCalls = 0;
   for (const h of owned()) { const b = S.holdings[h.id].biz; if (b && b.type === 'operating') b.monthProfit = 0; }
   S.monthIncome = {};
 }
@@ -498,7 +637,11 @@ function checkPortfolioEvents(prevAth) {
   const t = total();
   if (t > prevAth * 1.0005) {
     const last = S.events.find(e => e.kind === 'ath');
-    if (!last || S.simTime - last.t > DAY_MS) logEvent('ath', 'New all-time high', fmtMoneyPlain(t) + ' — previous peak ' + fmtMoneyPlain(prevAth) + '.');
+    const big = !last || t > last.peak * 1.02;
+    if (!last || big || S.simTime - last.t > 7 * DAY_MS) {
+      logEvent('ath', 'New all-time high', fmtMoneyPlain(t) + ' — previous peak ' + fmtMoneyPlain(prevAth) + '.');
+      S.events[0].peak = t;
+    }
   }
   const dd = drawdownFree();
   const level = dd >= 0.15 ? 3 : dd >= 0.10 ? 2 : dd >= 0.05 ? 1 : 0;
@@ -623,7 +766,7 @@ function incomeRunRate() {
   let annual = 0;
   for (const h of owned()) {
     const st = S.holdings[h.id];
-    if (st.biz && st.biz.type === 'operating') annual += st.biz.revenue * st.biz.margin * h.biz.stake * 0.45;
+    if (st.biz && st.biz.type === 'operating') annual += st.biz.revenue * st.biz.margin * st.biz.stake * 0.45;
     else if (h.yld) annual += valueOf(h) * h.yld;
   }
   return annual;
@@ -631,8 +774,17 @@ function incomeRunRate() {
 
 function burnRate() {
   let b = 0;
-  for (const h of owned()) { const st = S.holdings[h.id]; if (st.biz && st.biz.type === 'venture') b += st.biz.burn; }
+  for (const h of owned()) { const st = S.holdings[h.id]; if (st.biz && st.biz.type === 'venture' && !st.biz.dead) b += st.biz.burn; }
   return b;
+}
+/* The part of that burn you personally fund — the rest is grants, contracts or investors. */
+function callRate() {
+  let c = 0;
+  for (const h of owned()) {
+    const st = S.holdings[h.id];
+    if (st.biz && st.biz.type === 'venture' && st.biz.step === 0 && !st.biz.dead) c += st.biz.burn * (h.biz.ownerShare ?? 0.6);
+  }
+  return c;
 }
 
 function portfolioVol() {
@@ -647,12 +799,23 @@ function drawdownFree() { return (S.ath - rawTotal()) / S.ath; }
 
 /* Total expected return: for an operating company that is revenue growth plus the
    distribution yield its multiple implies; for a venture, drift plus expected jumps. */
-function expectedReturn(h) {
-  const st = S.holdings[h.id];
-  if (st && st.biz && st.biz.type === 'operating') return h.mu + 0.45 / st.biz.multiple;
-  return h.mu;
-}
+function expectedReturn(h) { return h.mu + distYield(h); }
 function distYield(h) {
   const st = S.holdings[h.id];
-  return st && st.biz && st.biz.type === 'operating' ? 0.45 / st.biz.multiple : 0;
+  if (!st || !st.biz || st.biz.type !== 'operating') return 0;
+  const b = st.biz;
+  return (0.45 * b.revenue * b.margin) / enterpriseValue(b);
+}
+/* The next thing due to happen to a company, for the UI to show. */
+function nextMilestone(h) {
+  const st = S.holdings[h.id];
+  if (!st || !st.biz) return null;
+  const b = st.biz, m = h.biz;
+  if (b.type === 'venture') {
+    if (b.dead) return null;
+    const nxt = (m.arc || [])[b.step];
+    return nxt ? { label: 'Next round', title: nxt.stage + ' target ' + fmtMoneyPlain(nxt.post), detail: nxt.milestone, years: nxt.years } : null;
+  }
+  const ev = (m.events || [])[b.evStep];
+  return ev ? { label: 'Next expected', title: ev.title, detail: ev.body, years: ev.years } : null;
 }

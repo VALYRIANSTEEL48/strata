@@ -1,6 +1,6 @@
 /* Strata — UI layer */
 
-const APP_VERSION = '2.0.0';
+const APP_VERSION = '2.1.0';
 let view = 'home';
 let range = '1M';
 let classFilter = 'all';
@@ -280,10 +280,10 @@ function renderHome() {
   $('#home-activity').innerHTML = S.events.slice(0, 4).map(eventRow).join('') || '<div class="empty">Nothing yet.</div>';
 }
 
-const EV_ICON = { ath: '◆', income: '↓', up: '▲', down: '▼', note: '•', trade: '⇄', round: '★' };
+const EV_ICON = { ath: '◆', income: '↓', up: '▲', down: '▼', note: '•', trade: '⇄', round: '★', call: '↑' };
 function eventRow(e) {
   const color = e.kind === 'up' || e.kind === 'income' ? 'var(--up)' : e.kind === 'down' ? 'var(--down)'
-    : e.kind === 'round' ? 'var(--gold)' : 'var(--accent-2)';
+    : e.kind === 'round' ? 'var(--gold)' : e.kind === 'call' ? 'var(--muted)' : 'var(--accent-2)';
   return `<div class="ins"><span class="ico" style="color:${color}">${EV_ICON[e.kind] || '•'}</span>
     <span style="flex:1;min-width:0"><span class="t">${esc(e.title)}</span><span class="b">${esc(e.body)}</span><span class="time">${relTime(e.t)}</span></span></div>`;
 }
@@ -340,7 +340,7 @@ function renderInsights() {
 
   const ventures = owned().filter(h => S.holdings[h.id].biz && S.holdings[h.id].biz.type === 'venture');
   const vv = ventures.reduce((s, h) => s + valueOf(h), 0);
-  ins.push({ i: '⚗', t: 'Venture exposure', b: `${ventures.length} pre-revenue companies worth ${priv(money(vv))}, ${(100 * vv / t).toFixed(1)}% of net worth, burning ${priv(money(burnRate()))} a year between them. None of it is liquid and any of it can go to zero.` });
+  ins.push({ i: '⚗', t: 'Venture exposure', b: `${ventures.length} pre-revenue companies worth ${priv(money(vv))}, ${(100 * vv / t).toFixed(1)}% of net worth, burning ${priv(money(burnRate()))} a year between them, ${priv(money(callRate()))} of which you fund yourself until a round takes over. None of it is liquid and any of it can go to zero.` });
 
   const ops = owned().filter(h => S.holdings[h.id].biz && S.holdings[h.id].biz.type === 'operating');
   const ov = ops.reduce((s, h) => s + valueOf(h), 0);
@@ -399,7 +399,7 @@ function renderInsights() {
     return `<button class="row norow-spark" data-asset="${h.id}">
       <span class="tick" style="color:${CLASSES.private.color}">${esc(h.sym)}</span>
       <span class="mid"><span class="nm">${esc(h.name)}</span><span class="sub">${priv(money(b.revenue))} rev · ${(b.margin * 100).toFixed(1)}% margin · ${b.multiple.toFixed(1)}×</span></span>
-      <span class="right"><span class="val">${priv(money(valueOf(h)))}</span><span class="chg muted">${(h.biz.stake * 100).toFixed(0)}% owned</span></span></button>`;
+      <span class="right"><span class="val">${priv(money(valueOf(h)))}</span><span class="chg muted">${(stakeOf(h) * 100).toFixed(0)}% owned</span></span></button>`;
   }).join('') || '<div class="empty">No operating companies held.</div>';
 
   $('#venture-card').innerHTML = ventures.sort((a, b) => valueOf(b) - valueOf(a)).map(h => {
@@ -407,13 +407,13 @@ function renderInsights() {
     return `<button class="row norow-spark" data-asset="${h.id}">
       <span class="tick" style="color:${CLASSES.private.color}">${esc(h.sym)}</span>
       <span class="mid"><span class="nm">${esc(h.name)}</span><span class="sub">${b.stage} · ${priv(money(b.burn))}/yr burn${b.rounds ? ' · ' + b.rounds + ' round' + (b.rounds > 1 ? 's' : '') : ''}</span></span>
-      <span class="right"><span class="val">${priv(money(valueOf(h)))}</span><span class="chg muted">${(h.biz.stake * 100).toFixed(0)}% owned</span></span></button>`;
+      <span class="right"><span class="val">${priv(money(valueOf(h)))}</span><span class="chg muted">${(stakeOf(h) * 100).toFixed(0)}% owned</span></span></button>`;
   }).join('') || '<div class="empty">No venture positions held.</div>';
 }
 
 /* ---------- activity ---------- */
 function renderActivity() {
-  const kinds = [['all', 'All'], ['trade', 'Trades'], ['income', 'Income'], ['round', 'Rounds'], ['up', 'Movers'], ['ath', 'Milestones']];
+  const kinds = [['all', 'All'], ['trade', 'Trades'], ['income', 'Income'], ['round', 'Rounds'], ['call', 'Capital calls'], ['up', 'Movers'], ['ath', 'Milestones']];
   $('#activity-chips').innerHTML = kinds.map(k => `<button data-act-filter="${k[0]}" aria-selected="${activityFilter === k[0]}">${k[1]}</button>`).join('');
   const list = S.events.filter(e => activityFilter === 'all' || e.kind === activityFilter ||
     (activityFilter === 'up' && (e.kind === 'up' || e.kind === 'down')) ||
@@ -463,10 +463,12 @@ function renderAsset() {
       <div class="kv"><span class="k">EBITDA</span><span class="v">${priv(money(ebitda))}</span></div>
       <div class="kv"><span class="k">Applied multiple</span><span class="v">${b.multiple.toFixed(2)}×</span></div>
       <div class="kv"><span class="k">Enterprise value</span><span class="v">${priv(money(ebitda * b.multiple))}</span></div>
-      <div class="kv"><span class="k">Your stake</span><span class="v">${(h.biz.stake * 100).toFixed(0)}% · ${priv(money(v))}</span></div>
-      <div class="kv"><span class="k">Headcount</span><span class="v">${h.biz.headcount}</span></div>
+      <div class="kv"><span class="k">Your stake</span><span class="v">${(stakeOf(h) * 100).toFixed(1)}% · ${priv(money(v))}</span></div>
+      <div class="kv"><span class="k">Headcount</span><span class="v">${b.headcount}</span></div>
       <div class="kv"><span class="k">YTD revenue / profit</span><span class="v">${priv(money(b.ytdRevenue))} / ${priv(money(b.ytdProfit))}</span></div>
-    </div>
+      ${b.assets ? `<div class="kv"><span class="k">Recognised assets</span><span class="v">${priv(money(b.assets))} <span class="muted" style="font-weight:400">land, reserves and equipment</span></span></div>` : ''}
+      ${b.basis === 'arr' ? `<div class="kv"><span class="k">Valuation basis</span><span class="v">${b.arrMultiple.toFixed(1)}× recurring revenue</span></div>` : ''}
+    </div>${milestoneCard(h)}
     <div class="section-head"><h2>Company accounts</h2></div><div class="card">
       ${b.accounts.map(a => `<div class="kv"><span class="k">${esc(a.name)}</span><span class="v">${priv(money(a.bal, { full: true }))}</span></div>`).join('')}
       <div class="kv"><span class="k" style="color:var(--text);font-weight:650">Cash on hand</span><span class="v">${priv(money(b.accounts.reduce((s, a) => s + a.bal, 0), { full: true }))}</span></div>
@@ -479,13 +481,18 @@ function renderAsset() {
     extra += `<div class="section-head"><h2>Company</h2></div><div class="card">
       <div class="kv"><span class="k">Stage</span><span class="v">${b.stage}${b.rounds ? ' · ' + b.rounds + ' round' + (b.rounds > 1 ? 's' : '') + ' since' : ''}</span></div>
       <div class="kv"><span class="k">Enterprise valuation</span><span class="v">${priv(money(b.valuation))}</span></div>
-      <div class="kv"><span class="k">Your stake</span><span class="v">${(h.biz.stake * 100).toFixed(0)}% · ${priv(money(v))}</span></div>
-      <div class="kv"><span class="k">Cash burn</span><span class="v">${priv(money(b.burn))} / yr</span></div>
+      <div class="kv"><span class="k">Your stake</span><span class="v">${(stakeOf(h) * 100).toFixed(1)}%${b.rounds ? ' (from ' + (h.biz.stake * 100).toFixed(0) + '%)' : ''} · ${priv(money(v))}</span></div>
+      <div class="kv"><span class="k">Cash burn</span><span class="v">${b.burn > 0 ? priv(money(b.burn)) + ' / yr' : 'none'}</span></div>
+      ${b.step === 0 && !b.dead ? `<div class="kv"><span class="k">You fund</span><span class="v">${priv(money(b.burn * (h.biz.ownerShare ?? 0.6)))} / yr${h.biz.offsetBy ? ' <span class="muted" style="font-weight:400">rest covered by ' + esc(h.biz.offsetBy) + '</span>' : ''}</span></div>` : ''}
+      <div class="kv"><span class="k">Capital called from you</span><span class="v">${priv(money(b.funded || 0))}${b.step > 0 ? ' <span class="muted" style="font-weight:400">investors fund it now</span>' : ''}</span></div>
       <div class="kv"><span class="k">Burned since first run</span><span class="v">${priv(money(b.cashOut))}</span></div>
-      <div class="kv"><span class="k">Headcount</span><span class="v">${h.biz.headcount}</span></div>
+      <div class="kv"><span class="k">Headcount</span><span class="v">${b.headcount}</span></div>
+      <div class="kv"><span class="k">Outside money raised</span><span class="v">${b.raised ? priv(money(b.raised)) : 'none — self-funded'}</span></div>
       <div class="kv"><span class="k">Current milestone</span><span class="v" style="font-weight:400;text-align:right">${esc(b.milestone)}</span></div>
-      <div class="footnote">Pre-revenue. Value moves on progress and on what the next round is marked at, not on earnings. It pays no income and cannot be sold quickly.</div>
-    </div>`;
+      <div class="footnote">${b.dead ? 'Wound down. What is left is residual IP and equipment.'
+        : 'Pre-revenue. Value moves in steps, when a new lead prices the company — and every round dilutes the stake that steps up. It pays no income and cannot be sold quickly.'}</div>
+    </div>${milestoneCard(h)}`;
+    extra += '';
   } else if (h.cls === 'realty' && h.qty === 1) {
     const noi = (held ? v : price) * h.yld;
     extra += `<div class="section-head"><h2>Property</h2></div><div class="card">
@@ -535,6 +542,17 @@ function renderAsset() {
       <div class="kv"><span class="k">Trading cost</span><span class="v">${(feeRate(h.cls) * 100).toFixed(2)}%</span></div>
     </div>`;
   drawChart($('#chart-asset'), assetSeries(h, sheetRange), { height: 150, color: c7 >= 0 ? '#2FE0A8' : '#FF5C7A' });
+}
+
+/* What the company is expected to do next — a round for a venture, a deal or a
+   revaluation for an operating business. Timing is a hazard rate, not a schedule. */
+function milestoneCard(h) {
+  const n = nextMilestone(h);
+  if (!n) return '';
+  const when = n.years < 1.5 ? 'within a year or so' : n.years < 3 ? 'in a couple of years' : 'further out';
+  return `<div class="card"><div class="eyebrow">${n.label} · ${when}</div>
+    <div style="margin-top:6px;font-size:13.5px;font-weight:650">${esc(n.title)}</div>
+    <div style="margin-top:4px;font-size:12.5px;color:var(--muted)">${esc(n.detail)}</div></div>`;
 }
 
 function renderProfile() {
