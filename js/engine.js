@@ -44,6 +44,9 @@ const SESSION = { equity: 'exchange', etf: 'exchange', metals: 'weekday' };
    to stay honest is the expected value, not the median. The effect is a realistic
    venture shape — most marks drift sideways or down, and the occasional raise carries
    the return. */
+/* How much of a dollar burned becomes durable enterprise value. Below 1 because
+   overhead, dead ends and salaries for work that gets thrown away are real. */
+const BURN_EFFICIENCY = 0.70;
 const ROUND_UP_MEAN = 0.50;    // E[step]-1 for a step-up of 1.25–1.75
 const DOWN_ROUND_RATE = 0.15;  // per year
 const ROUND_DOWN_MEAN = -0.325; // E[step]-1 for a markdown of 0.50–0.85
@@ -394,6 +397,11 @@ function stepMarket(t0, t1) {
       // between rounds a private mark barely moves: no one is repricing it
       b.valuation *= Math.exp((h.mu - 0.5 * sg * sg) * dtCal + sg * sq * gauss());
       b.cashOut += b.burn * dtCal;
+      /* The burn buys something: prototypes, test data, a team, a milestone closer.
+         Most of it lands on the balance sheet as work done; the rest is overhead
+         that never becomes value. The risk that it is worth nothing in the end is
+         already carried by the markdown and failure hazards below, not here. */
+      if (!b.dead) b.valuation += b.burn * dtCal * BURN_EFFICIENCY;
       if (!b.dead && b.step === 0) capitalCall(h, b, b.burn * (m.ownerShare ?? 0.6) * dtCal);
       applyVentureArc(h, st, b, m, dtCal);
       st.price = b.stake * b.valuation;

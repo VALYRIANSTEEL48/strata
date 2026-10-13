@@ -1,6 +1,6 @@
 /* Strata — UI layer */
 
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 let view = 'home';
 let range = '1M';
 let classFilter = 'all';
